@@ -77,8 +77,8 @@ func moudleInit(L *C.lua_State) (C.int, error) {
 	cname := C.CString("Preload")
 	defer C.free(unsafe.Pointer(cname))
 
-	top := gettop(L)
-	defer top.settop(L)
+	top := getTop(L)
+	defer top.setTop(L)
 
 	buff, sz := quickCStr(Preload)
 	err := C.luaL_loadbufferx(L, buff, sz, cname, nil)
@@ -101,9 +101,9 @@ func moudleInit(L *C.lua_State) (C.int, error) {
 	return ref, nil
 }
 
-func (vm *LuaVM) Import(file string, ret *LuaTable) error {
-	top := gettop(vm.L)
-	defer top.settop(vm.L)
+func (vm *VM) Import(file string, ret *Table) error {
+	top := getTop(vm.L)
+	defer top.setTop(vm.L)
 
 	C.lua_pushnil(vm.L)
 	pushString(vm.L, "import")
@@ -117,16 +117,16 @@ func (vm *LuaVM) Import(file string, ret *LuaTable) error {
 
 	if ret != nil {
 		v := toGoValue(vm.L, C.LUA_TTABLE, -1)
-		if vt, ok := v.(LuaTable); ok {
+		if vt, ok := v.(Table); ok {
 			*ret = vt
 		}
 	}
 	return nil
 }
 
-func (vm *LuaVM) GetMember(file, name string) (interface{}, error) {
-	top := gettop(vm.L)
-	defer top.settop(vm.L)
+func (vm *VM) GetMember(file, name string) (interface{}, error) {
+	top := getTop(vm.L)
+	defer top.setTop(vm.L)
 
 	pushString(vm.L, file)
 	pushString(vm.L, name)
@@ -139,9 +139,9 @@ func (vm *LuaVM) GetMember(file, name string) (interface{}, error) {
 	return toGoValue(vm.L, C.LUA_NUMTAGS, -1), nil
 }
 
-func (vm *LuaVM) Call(file, name string, resultCount int, args ...interface{}) ([]LuaValue, error) {
-	top := gettop(vm.L)
-	defer top.settop(vm.L)
+func (vm *VM) Call(file, name string, resultCount int, args ...interface{}) ([]Value, error) {
+	top := getTop(vm.L)
+	defer top.setTop(vm.L)
 
 	pushString(vm.L, file)
 	pushString(vm.L, name)

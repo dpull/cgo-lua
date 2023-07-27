@@ -15,7 +15,7 @@ static int cgo_lua_next(lua_State* L, int top, int idx, int* tkey, int* tvalue) 
 		*tkey = lua_type(L, -2);
 		*tvalue = lua_type(L, -1);
 	}
-    return ret;
+	return ret;
 }
 
 static const void* cgo_lua_tpointer(lua_State* L, int idx) {
@@ -31,15 +31,15 @@ import (
 
 var Errorf = fmt.Errorf
 
-type LuaValue interface{} // string, int64, float64, LuaTable
-type LuaTable map[LuaValue]LuaValue
-type LuaVM struct {
+type Value interface{} // string, int64, float64, Table
+type Table map[Value]Value
+type VM struct {
 	L     *C.lua_State
 	entry C.int
 }
-type tableCache map[unsafe.Pointer]LuaTable
+type tableCache map[unsafe.Pointer]Table
 
-func Open() (*LuaVM, error) {
+func Open() (*VM, error) {
 	L := C.luaL_newstate()
 	if L == nil {
 		return nil, Errorf("luaL_newstate failed")
@@ -53,24 +53,24 @@ func Open() (*LuaVM, error) {
 		return nil, err
 	}
 
-	return &LuaVM{L: L, entry: ref}, nil
+	return &VM{L: L, entry: ref}, nil
 }
 
-func (vm *LuaVM) Close() {
+func (vm *VM) Close() {
 	C.lua_close(vm.L)
 }
 
-func (vm *LuaVM) Version() float64 {
+func (vm *VM) Version() float64 {
 	v := C.lua_version(vm.L)
 	return float64(*v)
 }
 
-func (vm *LuaVM) DoString(str string) ([]LuaValue, error) {
+func (vm *VM) DoString(str string) ([]Value, error) {
 	cname := C.CString("DoString")
 	defer C.free(unsafe.Pointer(cname))
 
-	top := gettop(vm.L)
-	defer top.settop(vm.L)
+	top := getTop(vm.L)
+	defer top.setTop(vm.L)
 
 	buff, sz := quickCStr(str)
 	err := C.luaL_loadbufferx(vm.L, buff, sz, cname, nil)
@@ -90,12 +90,12 @@ func (vm *LuaVM) DoString(str string) ([]LuaValue, error) {
 	return ret, nil
 }
 
-func (vm *LuaVM) GetGlobal(name string) LuaValue {
+func (vm *VM) GetGlobal(name string) Value {
 	cname := C.CString(name)
 	defer C.free(unsafe.Pointer(cname))
 
-	top := gettop(vm.L)
-	defer top.settop(vm.L)
+	top := getTop(vm.L)
+	defer top.setTop(vm.L)
 
 	tv := C.lua_getglobal(vm.L, cname)
 	return toGoValue(vm.L, tv, -1)
@@ -113,28 +113,27 @@ func pushString(L *C.lua_State, str string) {
 
 		C.lua_pushlstring(L, cstr, C.ulong(len(str)))
 	*/
-
 	cstr, sz := quickCStr(str)
 	C.lua_pushlstring(L, cstr, sz)
 }
 
-func stackToGoValue(L *C.lua_State, resultCount C.int) []LuaValue {
+func stackToGoValue(L *C.lua_State, resultCount C.int) []Value {
 	if resultCount == 0 {
 		return nil
 	}
-	ret := make([]LuaValue, resultCount)
+	ret := make([]Value, resultCount)
 	for i := C.int(0); i < resultCount; i++ {
 		ret[i] = toGoValue(L, C.LUA_NUMTAGS, i-resultCount)
 	}
 	return ret
 }
 
-func toGoValue(L *C.lua_State, t C.int, idx C.int) LuaValue {
+func toGoValue(L *C.lua_State, t C.int, idx C.int) Value {
 	tc := make(tableCache)
 	return toGoValueSafe(L, t, idx, tc)
 }
 
-func toGoValueSafe(L *C.lua_State, t C.int, idx C.int, tc tableCache) LuaValue {
+func toGoValueSafe(L *C.lua_State, t C.int, idx C.int, tc tableCache) Value {
 	if t == C.LUA_NUMTAGS {
 		t = C.lua_type(L, idx)
 	}
@@ -153,9 +152,9 @@ func toGoValueSafe(L *C.lua_State, t C.int, idx C.int, tc tableCache) LuaValue {
 	}
 }
 
-func table2Map(L *C.lua_State, idx C.int, tc tableCache) LuaTable {
-	top := gettop(L)
-	defer top.settop(L)
+func table2Map(L *C.lua_State, idx C.int, tc tableCache) Table {
+	top := getTop(L)
+	defer top.setTop(L)
 
 	if idx < 0 {
 		idx = C.int(top) + idx + 1
@@ -170,7 +169,7 @@ func table2Map(L *C.lua_State, idx C.int, tc tableCache) LuaTable {
 		return m
 	}
 
-	m = make(LuaTable)
+	m = make(Table)
 	tc[ptr] = m
 
 	C.lua_pushnil(L)
@@ -199,7 +198,7 @@ func pushGoValue(L *C.lua_State, args ...interface{}) C.int {
 		switch argv := arg.(type) {
 		case string:
 			pushString(L, argv)
-		case LuaTable:
+		case Table:
 			C.lua_pushnil(L) // TODO: lua_createtable
 		default:
 			v := reflect.ValueOf(arg)
@@ -219,10 +218,10 @@ func pushGoValue(L *C.lua_State, args ...interface{}) C.int {
 
 type topStack C.int
 
-func gettop(L *C.lua_State) topStack {
+func getTop(L *C.lua_State) topStack {
 	return topStack(C.lua_gettop(L))
 }
 
-func (s topStack) settop(L *C.lua_State) {
+func (s topStack) setTop(L *C.lua_State) {
 	C.lua_settop(L, C.int(s))
 }

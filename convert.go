@@ -2,7 +2,7 @@ package cgo_lua
 
 import "reflect"
 
-func Convert(src LuaValue, dst interface{}) error {
+func Convert(src Value, dst interface{}) error {
 	dv := reflect.ValueOf(dst)
 	if dv.Kind() != reflect.Pointer {
 		return Errorf("dst must be a pointer")
@@ -11,7 +11,7 @@ func Convert(src LuaValue, dst interface{}) error {
 	return convert(src, dv)
 }
 
-func convert(src LuaValue, dst reflect.Value) error {
+func convert(src Value, dst reflect.Value) error {
 	switch dst.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		if v, ok := src.(int64); ok {
@@ -39,14 +39,14 @@ func convert(src LuaValue, dst reflect.Value) error {
 		}
 
 	case reflect.Map:
-		if v, ok := src.(LuaTable); ok {
+		if v, ok := src.(Table); ok {
 			return convertMap(v, dst)
 		}
 	}
 	return Errorf("type cannot be converted, %v -> %v", reflect.TypeOf(src).Kind(), dst.Kind())
 }
 
-func convertMap(src LuaTable, dst reflect.Value) error {
+func convertMap(src Table, dst reflect.Value) error {
 	t := dst.Type()
 	tk := t.Key()
 	te := t.Elem()
