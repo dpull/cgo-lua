@@ -17,6 +17,10 @@ static int cgo_lua_next(lua_State* L, int top, int idx, int* tkey, int* tvalue) 
 	}
     return ret;
 }
+
+static const void* cgo_lua_tpointer(lua_State* L, int idx) {
+	return lua_istable(L, idx) ? lua_topointer(L, idx) : NULL;
+}
 */
 import "C"
 import (
@@ -25,17 +29,14 @@ import (
 	"unsafe"
 )
 
-type LuaString string
-type LuaInt int64
-type LuaDouble float64
-type LuaTable map[interface{}]interface{}
-
 var Errorf = fmt.Errorf
 
+type LuaTable map[interface{}]interface{}
 type LuaVM struct {
 	L     *C.lua_State
 	entry C.int
 }
+type tableCache map[unsafe.Pointer]LuaTable
 
 func Open() (*LuaVM, error) {
 	L := C.luaL_newstate()
@@ -116,25 +117,6 @@ func pushString(L *C.lua_State, str string) {
 	C.lua_pushlstring(L, cstr, sz)
 }
 
-func toGoValue(L *C.lua_State, t C.int, idx C.int) interface{} {
-	if t == C.LUA_NUMTAGS {
-		t = C.lua_type(L, idx)
-	}
-	switch t {
-	case C.LUA_TNUMBER:
-		if C.lua_isinteger(L, idx) != 0 {
-			return LuaInt(C.lua_tointegerx(L, idx, nil))
-		}
-		return LuaDouble(C.lua_tonumberx(L, idx, nil))
-	case C.LUA_TSTRING:
-		return LuaString(C.GoString(C.lua_tolstring(L, idx, nil)))
-	case C.LUA_TTABLE:
-		return table2Map(L, idx)
-	default:
-		return nil
-	}
-}
-
 func stackToGoValue(L *C.lua_State, resultCount C.int) []interface{} {
 	if resultCount == 0 {
 		return nil
@@ -146,7 +128,31 @@ func stackToGoValue(L *C.lua_State, resultCount C.int) []interface{} {
 	return ret
 }
 
-func table2Map(L *C.lua_State, idx C.int) LuaTable {
+func toGoValue(L *C.lua_State, t C.int, idx C.int) interface{} {
+	tc := make(tableCache)
+	return toGoValueSafe(L, t, idx, tc)
+}
+
+func toGoValueSafe(L *C.lua_State, t C.int, idx C.int, tc tableCache) interface{} {
+	if t == C.LUA_NUMTAGS {
+		t = C.lua_type(L, idx)
+	}
+	switch t {
+	case C.LUA_TNUMBER:
+		if C.lua_isinteger(L, idx) != 0 {
+			return int64(C.lua_tointegerx(L, idx, nil))
+		}
+		return float64(C.lua_tonumberx(L, idx, nil))
+	case C.LUA_TSTRING:
+		return C.GoString(C.lua_tolstring(L, idx, nil))
+	case C.LUA_TTABLE:
+		return table2Map(L, idx, tc)
+	default:
+		return nil
+	}
+}
+
+func table2Map(L *C.lua_State, idx C.int, tc tableCache) LuaTable {
 	top := gettop(L)
 	defer top.settop(L)
 
@@ -154,11 +160,17 @@ func table2Map(L *C.lua_State, idx C.int) LuaTable {
 		idx = C.int(top) + idx + 1
 	}
 
-	if C.lua_type(L, idx) != C.LUA_TTABLE {
+	ptr := C.cgo_lua_tpointer(L, idx)
+	if ptr == nil {
 		return nil
 	}
+	m, ok := tc[ptr]
+	if ok {
+		return m
+	}
 
-	m := LuaTable{}
+	m = make(LuaTable)
+	tc[ptr] = m
 
 	C.lua_pushnil(L)
 	for {
@@ -167,12 +179,12 @@ func table2Map(L *C.lua_State, idx C.int) LuaTable {
 			break
 		}
 
-		value := toGoValue(L, tvalue, -1)
+		value := toGoValueSafe(L, tvalue, -1, tc)
 		if value == nil {
 			continue
 		}
 
-		key := toGoValue(L, tkey, -2)
+		key := toGoValueSafe(L, tkey, -2, tc)
 		if key == nil {
 			continue
 		}
@@ -183,17 +195,22 @@ func table2Map(L *C.lua_State, idx C.int) LuaTable {
 
 func pushGoValue(L *C.lua_State, args ...interface{}) C.int {
 	for _, arg := range args {
-		v := reflect.ValueOf(arg)
-		if v.Kind() == reflect.String {
-			pushString(L, v.String())
-		} else if v.CanInt() {
-			C.lua_pushinteger(L, C.longlong(v.Int()))
-		} else if v.CanUint() {
-			C.lua_pushinteger(L, C.longlong(v.Uint()))
-		} else if v.CanFloat() {
-			C.lua_pushnumber(L, C.double(v.Float()))
-		} else {
-			C.lua_pushnil(L)
+		switch argv := arg.(type) {
+		case string:
+			pushString(L, argv)
+		case LuaTable:
+			C.lua_pushnil(L) // TODO: lua_createtable
+		default:
+			v := reflect.ValueOf(arg)
+			if v.CanInt() {
+				C.lua_pushinteger(L, C.longlong(v.Int()))
+			} else if v.CanUint() {
+				C.lua_pushinteger(L, C.longlong(v.Uint()))
+			} else if v.CanFloat() {
+				C.lua_pushnumber(L, C.double(v.Float()))
+			} else {
+				C.lua_pushnil(L)
+			}
 		}
 	}
 	return C.int(len(args))

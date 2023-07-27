@@ -58,6 +58,10 @@ local function entry(file, method, ...)
 	if file ~= nil then
 		module = import(file)
 	end 
+
+	if method == nil then
+		return module
+	end 	
 	
 	local fn = module[method]
 	if type(fn) ~= "function" then
@@ -68,8 +72,6 @@ end
 
 return entry
 `
-
-var importString = "import"
 
 func moudleInit(L *C.lua_State) (C.int, error) {
 	cname := C.CString("Preload")
@@ -99,18 +101,25 @@ func moudleInit(L *C.lua_State) (C.int, error) {
 	return ref, nil
 }
 
-func (vm *LuaVM) Import(file string) error {
+func (vm *LuaVM) Import(file string, ret *LuaTable) error {
 	top := gettop(vm.L)
 	defer top.settop(vm.L)
 
 	C.lua_pushnil(vm.L)
-	pushString(vm.L, importString)
+	pushString(vm.L, "import")
 	pushString(vm.L, file)
 
-	err := C.cgo_lua_call_entry(vm.L, vm.entry, 3, 0)
+	err := C.cgo_lua_call_entry(vm.L, vm.entry, 3, 1)
 	if err != nil {
 		str := C.GoString(err)
 		return Errorf(str)
+	}
+
+	if ret != nil {
+		v := toGoValue(vm.L, C.LUA_TTABLE, -1)
+		if vt, ok := v.(LuaTable); ok {
+			*ret = vt
+		}
 	}
 	return nil
 }
