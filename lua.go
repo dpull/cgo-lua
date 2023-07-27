@@ -31,7 +31,8 @@ import (
 
 var Errorf = fmt.Errorf
 
-type LuaTable map[interface{}]interface{}
+type LuaValue interface{} // string, int64, float64, LuaTable
+type LuaTable map[LuaValue]LuaValue
 type LuaVM struct {
 	L     *C.lua_State
 	entry C.int
@@ -64,7 +65,7 @@ func (vm *LuaVM) Version() float64 {
 	return float64(*v)
 }
 
-func (vm *LuaVM) DoString(str string) ([]interface{}, error) {
+func (vm *LuaVM) DoString(str string) ([]LuaValue, error) {
 	cname := C.CString("DoString")
 	defer C.free(unsafe.Pointer(cname))
 
@@ -89,7 +90,7 @@ func (vm *LuaVM) DoString(str string) ([]interface{}, error) {
 	return ret, nil
 }
 
-func (vm *LuaVM) GetGlobal(name string) interface{} {
+func (vm *LuaVM) GetGlobal(name string) LuaValue {
 	cname := C.CString(name)
 	defer C.free(unsafe.Pointer(cname))
 
@@ -117,23 +118,23 @@ func pushString(L *C.lua_State, str string) {
 	C.lua_pushlstring(L, cstr, sz)
 }
 
-func stackToGoValue(L *C.lua_State, resultCount C.int) []interface{} {
+func stackToGoValue(L *C.lua_State, resultCount C.int) []LuaValue {
 	if resultCount == 0 {
 		return nil
 	}
-	ret := make([]interface{}, resultCount)
+	ret := make([]LuaValue, resultCount)
 	for i := C.int(0); i < resultCount; i++ {
 		ret[i] = toGoValue(L, C.LUA_NUMTAGS, i-resultCount)
 	}
 	return ret
 }
 
-func toGoValue(L *C.lua_State, t C.int, idx C.int) interface{} {
+func toGoValue(L *C.lua_State, t C.int, idx C.int) LuaValue {
 	tc := make(tableCache)
 	return toGoValueSafe(L, t, idx, tc)
 }
 
-func toGoValueSafe(L *C.lua_State, t C.int, idx C.int, tc tableCache) interface{} {
+func toGoValueSafe(L *C.lua_State, t C.int, idx C.int, tc tableCache) LuaValue {
 	if t == C.LUA_NUMTAGS {
 		t = C.lua_type(L, idx)
 	}

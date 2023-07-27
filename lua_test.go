@@ -8,15 +8,13 @@ import (
 
 func TestCreateVM(t *testing.T) {
 	vm, err := Open()
-	require.Nil(t, err)
-	require.NotNil(t, vm)
+	require.NoError(t, err)
 	defer vm.Close()
 }
 
 func TestDoStringAndGetGlobal(t *testing.T) {
 	vm, err := Open()
-	require.Nil(t, err)
-	require.NotNil(t, vm)
+	require.NoError(t, err)
 	defer vm.Close()
 
 	ret, err := vm.DoString(`
@@ -49,13 +47,15 @@ func TestDoStringAndGetGlobal(t *testing.T) {
 
 func TestDoStringCircularRef(t *testing.T) {
 	vm, err := Open()
-	require.Nil(t, err)
-	require.NotNil(t, vm)
+	require.NoError(t, err)
 	defer vm.Close()
 
 	ret, err := vm.DoString(`
 		local tb = {
-			a = 1, b = 2
+			a = 1, 
+			b = 2.1, 
+			[1] = "d",
+			[2.2] = "e",
 		}
 		tb.c = tb
 		return tb
@@ -63,14 +63,15 @@ func TestDoStringCircularRef(t *testing.T) {
 	require.Nil(t, err)
 	retTab := ret[0].(LuaTable)
 	require.Equal(t, int64(1), retTab["a"])
-	require.Equal(t, int64(2), retTab["b"])
+	require.Equal(t, 2.1, retTab["b"])
+	require.Equal(t, "d", retTab[int64(1)])
+	require.Equal(t, "e", retTab[2.2])
 	require.Equal(t, retTab, retTab["c"].(LuaTable))
 }
 
 func TestImport(t *testing.T) {
 	vm, err := Open()
-	require.Nil(t, err)
-	require.NotNil(t, vm)
+	require.NoError(t, err)
 	defer vm.Close()
 
 	err = vm.Import("XXXXXX.XXXXXXX", nil)

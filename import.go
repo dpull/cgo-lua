@@ -139,7 +139,7 @@ func (vm *LuaVM) GetMember(file, name string) (interface{}, error) {
 	return toGoValue(vm.L, C.LUA_NUMTAGS, -1), nil
 }
 
-func (vm *LuaVM) Call(file, name string, resultCount int, args ...interface{}) ([]interface{}, error) {
+func (vm *LuaVM) Call(file, name string, resultCount int, args ...interface{}) ([]LuaValue, error) {
 	top := gettop(vm.L)
 	defer top.settop(vm.L)
 
