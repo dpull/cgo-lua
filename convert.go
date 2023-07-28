@@ -52,7 +52,7 @@ func convertMap(src Table, dst reflect.Value) error {
 	te := t.Elem()
 
 	if dst.IsNil() {
-		dst.Set(reflect.MakeMap(t))
+		dst.Set(reflect.MakeMapWithSize(t, len(src)))
 	}
 
 	for k, v := range src {

@@ -39,6 +39,8 @@ type VM struct {
 }
 type tableCache map[unsafe.Pointer]Table
 
+var DefaultMapSize = 256
+
 func Open() (*VM, error) {
 	L := C.luaL_newstate()
 	if L == nil {
@@ -76,13 +78,13 @@ func (vm *VM) DoString(str string) ([]Value, error) {
 	err := C.luaL_loadbufferx(vm.L, buff, sz, cname, nil)
 	if err != C.LUA_OK {
 		str := C.GoString(C.lua_tolstring(vm.L, -1, nil))
-		return nil, Errorf("luaL_loadstring failed, %s", str)
+		return nil, Errorf("luaL_loadbufferx failed, %s", str)
 	}
 
 	err = C.lua_pcallk(vm.L, 0, C.LUA_MULTRET, 0, 0, nil)
 	if err != C.LUA_OK {
 		str := C.GoString(C.lua_tolstring(vm.L, -1, nil))
-		return nil, Errorf("lua_pcall failed, %s", str)
+		return nil, Errorf("lua_pcallk failed, %s", str)
 	}
 
 	resultCount := C.lua_gettop(vm.L) - C.int(top)
@@ -169,7 +171,7 @@ func table2Map(L *C.lua_State, idx C.int, tc tableCache) Table {
 		return m
 	}
 
-	m = make(Table)
+	m = make(Table, DefaultMapSize)
 	tc[ptr] = m
 
 	C.lua_pushnil(L)
@@ -188,6 +190,12 @@ func table2Map(L *C.lua_State, idx C.int, tc tableCache) Table {
 		if key == nil {
 			continue
 		}
+
+		switch key.(type) {
+		case Table:
+			continue
+		}
+
 		m[key] = value
 	}
 	return m

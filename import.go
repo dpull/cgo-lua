@@ -84,13 +84,13 @@ func moudleInit(L *C.lua_State) (C.int, error) {
 	err := C.luaL_loadbufferx(L, buff, sz, cname, nil)
 	if err != C.LUA_OK {
 		str := C.GoString(C.lua_tolstring(L, -1, nil))
-		return 0, Errorf("luaL_loadstring failed, %s", str)
+		return 0, Errorf("luaL_loadbufferx failed, %s", str)
 	}
 
 	err = C.lua_pcallk(L, 0, 1, 0, 0, nil)
 	if err != C.LUA_OK {
 		str := C.GoString(C.lua_tolstring(L, -1, nil))
-		return 0, Errorf("lua_pcall failed, %s", str)
+		return 0, Errorf("lua_pcallk failed, %s", str)
 	}
 
 	ref := C.luaL_ref(L, C.LUA_REGISTRYINDEX)
