@@ -37,11 +37,18 @@ func convert(src Value, dst reflect.Value) error {
 			dst.SetString(v)
 			return nil
 		}
-
+	case reflect.Bool:
+		if v, ok := src.(bool); ok {
+			dst.SetBool(v)
+			return nil
+		}
 	case reflect.Map:
 		if v, ok := src.(Table); ok {
 			return convertMap(v, dst)
 		}
+	case reflect.Interface:
+		dst.Set(reflect.ValueOf(src))
+		return nil
 	}
 	return Errorf("type cannot be converted, %v -> %v", reflect.TypeOf(src).Kind(), dst.Kind())
 }

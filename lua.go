@@ -31,7 +31,7 @@ import (
 
 var Errorf = fmt.Errorf
 
-type Value interface{} // string, int64, float64, Table
+type Value interface{} // string, int64, float64, bool, Table
 type Table map[Value]Value
 type VM struct {
 	L     *C.lua_State
@@ -140,6 +140,8 @@ func toGoValueSafe(L *C.lua_State, t C.int, idx C.int, tc tableCache) Value {
 		t = C.lua_type(L, idx)
 	}
 	switch t {
+	case C.LUA_TBOOLEAN:
+		return C.lua_toboolean(L, idx) != 0
 	case C.LUA_TNUMBER:
 		if C.lua_isinteger(L, idx) != 0 {
 			return int64(C.lua_tointegerx(L, idx, nil))
@@ -193,6 +195,7 @@ func table2Map(L *C.lua_State, idx C.int, tc tableCache) Table {
 
 		switch key.(type) {
 		case Table:
+			Errorf("not support lua table as map key, key:%v value:%v", key, value)
 			continue
 		}
 
@@ -204,6 +207,12 @@ func table2Map(L *C.lua_State, idx C.int, tc tableCache) Table {
 func pushGoValue(L *C.lua_State, args ...interface{}) C.int {
 	for _, arg := range args {
 		switch argv := arg.(type) {
+		case bool:
+			if argv {
+				C.lua_pushboolean(L, 1)
+			} else {
+				C.lua_pushboolean(L, 0)
+			}
 		case string:
 			pushString(L, argv)
 		case Table:

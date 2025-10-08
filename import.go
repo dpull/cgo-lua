@@ -53,7 +53,7 @@ function _G.import(filename, force)
 end
 
 local function entry(file, method, ...)
-	print("entry", file, method, ...)
+	-- print("entry", file, method, ...)
 	module = _G
 	if file ~= nil then
 		module = import(file)
